@@ -28,7 +28,7 @@ Word2Vec (média de embeddings).
 BERT (vetor [CLS]).
 Avaliação: métricas padrão (Acurácia, F1-score, Silhouette Score).
 
-############################################################################################################
+###########################################################################################################
 Para replicar os resultados da pesquisa, siga os passos abaixo. O notebook foi testado no Google Colab, garantindo um ambiente com todas as bibliotecas e recursos de hardware necessários.
 
 1.  Faça o download ou clone o repositório.**
