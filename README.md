@@ -53,6 +53,7 @@ Clone o repositório:
 git clone https://github.com/seu-usuario/vulnerability-scanner-hibrido.git
 cd vulnerability-scanner-hibrido
 
+
 ###########################################################################################################
 👨‍💻 Autor
 Fábio José do Nascimento
