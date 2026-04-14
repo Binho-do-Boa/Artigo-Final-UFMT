@@ -10,6 +10,10 @@ from tqdm import tqdm
 from transformers import AutoTokenizer, AutoModel
 from sklearn.metrics.pairwise import cosine_similarity
 
+# =============================================================================
+# 1. BAIXAR CVEs DO NVD
+# =============================================================================
+
 url = "https://services.nvd.nist.gov/rest/json/cves/2.0?resultsPerPage=500"
 
 print("Baixando CVEs recentes do NVD...")
@@ -22,12 +26,15 @@ for item in data.get("vulnerabilities", []):
     cve = item.get("cve", {})
     cve_id = cve.get("id")
 
+    # Descrição
     descriptions = cve.get("descriptions", [])
     description = descriptions[0].get("value") if descriptions else "Sem descrição"
 
+    # CWE
     weaknesses = cve.get("weaknesses", [])
     cwe = weaknesses[0]["description"][0].get("value", "UNKNOWN") if weaknesses and weaknesses[0].get("description") else "UNKNOWN"
 
+    # Métricas CVSS
     metrics = cve.get("metrics", {})
     base_severity_en = exploit = impact = None
 
@@ -48,9 +55,12 @@ for item in data.get("vulnerabilities", []):
         exploit = cvss.get("exploitabilityScore")
         impact = cvss.get("impactScore")
 
+    # Tradução de severidade para PT-BR
     severity_pt = {
-        "CRITICAL": "Crítico", "HIGH": "Alto",
-        "MEDIUM": "Médio", "LOW": "Baixo"
+        "CRITICAL": "Crítico", 
+        "HIGH": "Alto",
+        "MEDIUM": "Médio", 
+        "LOW": "Baixo"
     }.get(base_severity_en, "Não classificado")
 
     dataset.append({
@@ -63,7 +73,11 @@ for item in data.get("vulnerabilities", []):
     })
 
 df_cve = pd.DataFrame(dataset)
-df_cve.head(5)
+print(f"✓ {len(df_cve)} CVEs carregados.\n")
+
+# =============================================================================
+# 2. CARREGAR MODELO GraphCodeBERT
+# =============================================================================
 
 print("Carregando GraphCodeBERT...")
 tokenizer = AutoTokenizer.from_pretrained("microsoft/graphcodebert-base")
@@ -71,37 +85,84 @@ model = AutoModel.from_pretrained("microsoft/graphcodebert-base")
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model = model.to(device)
+print(f"✓ Modelo carregado em: {device}\n")
+
+# =============================================================================
+# 3. FUNÇÃO DE EMBEDDING + CACHE
+# =============================================================================
 
 def embed(text):
-    inputs = tokenizer(text, return_tensors="pt", truncation=True, max_length=512, padding=True).to(device)
+    """Gera embedding semântico para o texto usando GraphCodeBERT."""
+    inputs = tokenizer(
+        text, 
+        return_tensors="pt", 
+        truncation=True, 
+        max_length=512, 
+        padding=True
+    ).to(device)
     with torch.no_grad():
         outputs = model(**inputs)
     return outputs.last_hidden_state.mean(dim=1).cpu().numpy()
 
-# Cache
+# Cache de embeddings para performance
 cache_file = "cve_embeddings_cache.npy"
 if not os.path.exists(cache_file):
     print("Criando cache de embeddings (uma única vez)...")
-    embeddings = [embed(desc)[0] for desc in tqdm(df_cve["description"], desc="Cacheando CVEs")]
+    embeddings = [
+        embed(desc)[0] 
+        for desc in tqdm(df_cve["description"], desc="Cacheando CVEs")
+    ]
     np.save(cache_file, np.array(embeddings))
-    print("Cache criado!")
+    print("✓ Cache criado!\n")
 else:
     print("Carregando cache existente...")
 
 cve_emb_matrix = np.load(cache_file)
-print(f"Matriz carregada: {cve_emb_matrix.shape}\n")
+print(f"✓ Matriz de embeddings carregada: {cve_emb_matrix.shape}\n")
 
-def search_cve_optimized(code):
+# =============================================================================
+# 4. BUSCA SEMÂNTICA OTIMIZADA
+# =============================================================================
+
+def search_cve_optimized(code, threshold=0.75, top_k=5):
+    """
+    Busca CVEs semanticamente similares ao código fornecido.
+    
+    Args:
+        code (str): Código Python para análise
+        threshold (float): Limite mínimo de similaridade de cosseno
+        top_k (int): Número máximo de resultados a retornar
+    
+    Returns:
+        pd.DataFrame: CVEs similares com metadados
+    """
     try:
         code_emb = embed(code)[0]
         similarities = cosine_similarity([code_emb], cve_emb_matrix)[0]
+        
         df_temp = df_cve.copy()
         df_temp["similarity"] = similarities
-        return df_temp[df_temp["similarity"] > 0.75].sort_values("similarity", ascending=False).head(5)
-    except:
+        
+        results = df_temp[df_temp["similarity"] > threshold]
+        return results.sort_values("similarity", ascending=False).head(top_k)
+    except Exception as e:
+        print(f"Erro na busca semântica: {e}")
         return pd.DataFrame()
 
+# =============================================================================
+# 5. ANÁLISE ESTÁTICA AVANÇADA (AST + TAINT TRACKING)
+# =============================================================================
+
 def analyze_ast_advanced(code):
+    """
+    Análise estática com detecção de fluxos de dados inseguros.
+    
+    Args:
+        code (str): Código Python para análise
+    
+    Returns:
+        list: Lista de vulnerabilidades detectadas
+    """
     try:
         tree = ast.parse(code)
     except SyntaxError:
@@ -110,18 +171,22 @@ def analyze_ast_advanced(code):
     findings = []
     tainted_vars = set()
 
+    # Adiciona referência ao parent para taint tracking
     for node in ast.walk(tree):
-        # Fontes de taint
+        for child in ast.iter_child_nodes(node):
+            child.parent = node
+
+    for node in ast.walk(tree):
+        # === FONTES DE TAINT (user input) ===
         if isinstance(node, ast.Call):
             func = getattr(node.func, "id", None) or getattr(node.func, "attr", None)
             if func in ["input", "raw_input"]:
-                # Procura atribuição na mesma linha ou próxima
-                if isinstance(node.parent, (ast.Assign, ast.AugAssign)) if hasattr(node, 'parent') else False:
+                if hasattr(node, 'parent') and isinstance(node.parent, (ast.Assign, ast.AugAssign)):
                     for target in getattr(node.parent, 'targets', []):
                         if hasattr(target, "id"):
                             tainted_vars.add(target.id)
 
-        # Sinks
+        # === SINKS PERIGOSOS ===
         if isinstance(node, ast.Call):
             func_name = getattr(node.func, "id", None) or getattr(node.func, "attr", None)
             module = getattr(getattr(node.func, "value", None), "id", None) if hasattr(node.func, "value") else None
@@ -130,63 +195,90 @@ def analyze_ast_advanced(code):
             if func_name in ["system", "popen"] or (module == "subprocess" and func_name in ["call", "run", "Popen"]):
                 for arg in node.args:
                     if isinstance(arg, ast.Name) and arg.id in tainted_vars:
-                        findings.append("Injeção de Comando (com fluxo de dados do usuário)")
+                        findings.append("⚠️  Injeção de Comando (com fluxo de dados do usuário)")
                         break
 
             # Code Injection
             if func_name in ["eval", "exec"]:
                 for arg in node.args:
                     if isinstance(arg, ast.Name) and arg.id in tainted_vars:
-                        findings.append("Injeção de Código via eval/exec")
+                        findings.append("⚠️  Injeção de Código via eval/exec")
                         break
 
             # Insecure Deserialization
-            if func_name in ["load", "loads"] or (module == "pickle"):
-                findings.append("Desserialização Insegura (pickle)")
+            if func_name in ["load", "loads"] or module == "pickle":
+                findings.append("⚠️  Desserialização Insegura (pickle)")
 
-    return findings if findings else ["Nenhuma vulnerabilidade detectada via AST + Taint Tracking"]
+            # SQL Injection (básico)
+            if func_name == "execute":
+                for arg in node.args:
+                    if isinstance(arg, ast.BinOp) and isinstance(arg.op, ast.Add):
+                        findings.append("⚠️  SQL Injection (concatenação de string)")
+                        break
+
+    return findings if findings else ["✅ Nenhuma vulnerabilidade detectada via AST + Taint Tracking"]
+
+# =============================================================================
+# 6. FUNÇÃO PRINCIPAL DE SCAN
+# =============================================================================
 
 def vulnerability_scan(code):
-    print("══════════════════════════════════════════════════════════════════════")
-    print("          SCAN HÍBRIDO v2.0 - SAST + IA Semântica")
-    print("══════════════════════════════════════════════════════════════════════")
+    """
+    Executa scan híbrido combinando SAST e busca semântica em CVEs.
+    
+    Args:
+        code (str): Código Python a ser analisado
+    """
+    print("═" * 74)
+    print("          🔐 SCAN HÍBRIDO v2.0 - SAST + IA Semântica")
+    print("═" * 74)
 
-    print("\n[1] ANÁLISE ESTÁTICA + TAINT TRACKING")
+    # [1] Análise Estática
+    print("\n[1/2] ANÁLISE ESTÁTICA + TAINT TRACKING")
+    print("-" * 74)
     results = analyze_ast_advanced(code)
     for r in results:
-        print(f"   → {r}")
+        print(f"   {r}")
 
-    print("\n[2] BUSCA SEMÂNTICA EM CVEs REAIS (GraphCodeBERT + NVD)")
+    # [2] Busca Semântica
+    print("\n[2/2] BUSCA SEMÂNTICA EM CVEs REAIS (GraphCodeBERT + NVD)")
+    print("-" * 74)
     top = search_cve_optimized(code)
 
     if top.empty:
-        print("   Nenhum CVE com similaridade ≥ 0.75 encontrado.")
-        return
+        print("   ℹ️  Nenhum CVE com similaridade ≥ 0.75 encontrado.")
+    else:
+        print(f"   ✓ Encontrados {len(top)} CVEs relevantes:\n")
+        print(f"{'CVE':<18} {'Severidade':<10} {'Exploit':<8} {'Impact':<7} {'Similar':<9} CWE")
+        print("-" * 74)
+        for _, row in top.iterrows():
+            exp = f"{row['exploitabilityScore']:.1f}" if pd.notna(row['exploitabilityScore']) else "-"
+            imp = f"{row['impactScore']:.1f}" if pd.notna(row['impactScore']) else "-"
+            print(f"{row['cve']:<18} {row['baseSeverity']:<10} {exp:<8} {imp:<7} {row['similarity']:.4f}    {row['cwe']}")
+        print("-" * 74)
+    
+    print("\n" + "═" * 74)
 
-    print(f"   Encontrados {len(top)} CVEs relevantes:\n")
-    print("-"*95)
-    print(f"{'CVE':<16} {'Severidade':<11} {'Exploit':<9} {'Impact':<8} {'Similaridade':<12} CWE")
-    print("-"*95)
-    for _, row in top.iterrows():
-        exp = f"{row['exploitabilityScore']:.1f}" if pd.notna(row['exploitabilityScore']) else "-"
-        imp = f"{row['impactScore']:.1f}" if pd.notna(row['impactScore']) else "-"
-        print(f"{row['cve']:<16} {row['baseSeverity']:<11} {exp:<9} {imp:<8} {row['similarity']:.4f}     {row['cwe']}")
-    print("-"*95)
+# =============================================================================
+# 7. TESTES DE EXEMPLO
+# =============================================================================
 
-# Codigo Vulnerável 01
-code1 = """
+if __name__ == "__main__":
+    
+    # Teste 1: Command Injection + Insecure Deserialization
+    code1 = """
 import os, pickle
 arquivo = input("Arquivo: ")
 os.system("cat " + arquivo)
 dados = input("Dados: ")
 pickle.loads(dados.encode())
 """
-
-print("TESTE 1\n")
-vulnerability_scan(code1)
-
-# Codigo Vulnerável 01
-code2 = """
+    
+    print("\n🧪 TESTE 1: Command Injection + Desserialização Insegura\n")
+    vulnerability_scan(code1)
+    
+    # Teste 2: SQL Injection + Code Injection
+    code2 = """
 usuario = input("Usuário: ")
 query = "SELECT * FROM users WHERE nome='" + usuario + "'"
 cursor.execute(query)
@@ -194,6 +286,6 @@ cursor.execute(query)
 calc = input("Cálculo: ")
 print(eval(calc))
 """
-
-print("\n\nTESTE 2\n")
-vulnerability_scan(code2)
+    
+    print("\n\n🧪 TESTE 2: SQL Injection + Code Injection\n")
+    vulnerability_scan(code2)
