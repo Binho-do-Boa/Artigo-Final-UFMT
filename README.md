@@ -46,19 +46,14 @@ Este Jupyter Notebook implementa um scanner experimental híbrido de vulnerabili
         Score de similaridade
 
         Classificação CWE
+🛠️ Instalação
+
+Clone o repositório:
+```bash
+git clone https://github.com/seu-usuario/vulnerability-scanner-hibrido.git
+cd vulnerability-scanner-hibrido
 
 ###########################################################################################################
-Para replicar os resultados da pesquisa, siga os passos abaixo. O notebook foi testado no Google Colab, garantindo um ambiente com todas as bibliotecas e recursos de hardware necessários.
-
-1.  Faça o download ou clone o repositório.**
-      git clone [https://github.com/Binho-do-Boa/Artigo-Final-UFMT]
-2.  Acesse o Google Colab.
-3.  Faça o upload dos arquivos `Cod_Artigo_Final_Com_Graficos_Novo.ipynb` e `nvdcve-1.1-recent.json` para o seu Google Drive.
-4.  Abra o notebook `Cod_Artigo_Final_Com_Graficos_Novo.ipynb` no Google Colab.
-5.  Conecte seu Google Drive no notebook.
-6.  Execute todas as células do notebook. As dependências necessárias (como `transformers` e `gensim`) serão instaladas automaticamente, descomentar as linhas.
-O notebook irá gerar as tabelas e os gráficos comparativos, reproduzindo todos os resultados da pesquisa.
-
 👨‍💻 Autor
 Fábio José do Nascimento
 Pós-graduação em Gestão e Ciências de Dados – UFMT
