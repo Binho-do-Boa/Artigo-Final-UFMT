@@ -1,32 +1,51 @@
-Análise de Vulnerabilidades em Softwares com Técnicas de Inteligência Artificial
-Este repositório contém o código, dataset e experimentos desenvolvidos no âmbito do artigo científico “Análise de Vulnerabilidades em Softwares Utilizando Técnicas de Inteligência Artificial (IA)”, apresentado como requisito para conclusão da pós-graduação em Gestão e Ciências de Dados (UFMT).
+🛡️ Scanner Híbrido de Vulnerabilidades (SAST + IA Semântica)
 
-📌 Objetivo
-Investigar técnicas de mineração de dados e aprendizado de máquina na análise de vulnerabilidades de software, utilizando o dataset público NVD Recent (National Vulnerability Database).
+Este Jupyter Notebook implementa um scanner experimental híbrido de vulnerabilidades que combina:
 
-O trabalho compara diferentes formas de representação textual (Bag of Words, TF-IDF + PCA, Word2Vec e BERT) aplicadas a dois algoritmos amplamente utilizados:
-Random Forest → Classificação supervisionada (vulnerabilidade crítica vs. não crítica).
-K-means → Clusterização não supervisionada de descrições de vulnerabilidade.
+    Teste Estático de Segurança de Aplicações (SAST) com Rastreamento de Dados (Taint Tracking) baseado em AST
 
-⚙️ Tecnologias Utilizadas
-Linguagem: Python 3.9
-Bibliotecas principais:
-pandas, numpy, matplotlib, scikit-learn
-gensim (para Word2Vec)
-torch, transformers (para BERT/DistilBERT)
+    Busca semântica de vulnerabilidades reais usando GraphCodeBERT + Base de Dados NVD CVE
 
-📊 Metodologia
-Coleta de Dados: NVD Recent (NIST, 2025).
-Pré-processamento: limpeza, tokenização e vetorização textual.
-Modelagem:
-Random Forest (classificação).
-K-means (clusterização).
-Representações testadas:
-Bag of Words (baseline).
-TF-IDF + PCA.
-Word2Vec (média de embeddings).
-BERT (vetor [CLS]).
-Avaliação: métricas padrão (Acurácia, F1-score, Silhouette Score).
+🚀 Funcionalidades
+1. Análise Estática + Rastreamento de Dados
+
+    Parseia código Python em uma Árvore Sintática Abstrata (AST)
+
+    Identifica fontes de dados contaminados (ex: input, raw_input)
+
+    Detecta funções perigosas:
+
+        Injeção de comando (os.system, subprocess.call, etc.)
+
+        Injeção de código (eval, exec)
+
+        Desserialização insegura (pickle.loads)
+
+2. Busca Semântica de CVEs (com IA)
+
+    Baixa CVEs recentes da API do NVD
+
+    Gera embeddings para cada descrição de CVE usando microsoft/graphcodebert-base
+
+    Compara o código fornecido com a matriz de embeddings das CVEs
+
+    Retorna as 5 CVEs mais similares (similaridade > 0.75)
+
+3. Relatório Híbrido
+
+    Alertas estáticos + fluxo de dados contaminados
+
+    Referências reais de CVE com:
+
+        ID da CVE
+
+        Severidade (Crítico, Alto, Médio, Baixo)
+
+        Pontuações de Exploitabilidade e Impacto
+
+        Score de similaridade
+
+        Classificação CWE
 
 ###########################################################################################################
 Para replicar os resultados da pesquisa, siga os passos abaixo. O notebook foi testado no Google Colab, garantindo um ambiente com todas as bibliotecas e recursos de hardware necessários.
