@@ -41,7 +41,7 @@ Este Jupyter Notebook implementa um scanner experimental híbrido de vulnerabili
 
         Severidade (Crítico, Alto, Médio, Baixo)
 
-        Pontuações de Exploitabilidade e Impacto
+        Pontuações de Explorabilidade e Impacto
 
         Score de similaridade
 
