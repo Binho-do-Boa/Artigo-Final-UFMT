@@ -195,19 +195,19 @@ def analyze_ast_advanced(code):
             if func_name in ["system", "popen"] or (module == "subprocess" and func_name in ["call", "run", "Popen"]):
                 for arg in node.args:
                     if isinstance(arg, ast.Name) and arg.id in tainted_vars:
-                        findings.append("⚠️  Injeção de Comando (com fluxo de dados do usuário)")
+                        findings.append(" Injeção de Comando (com fluxo de dados do usuário)")
                         break
 
             # Code Injection
             if func_name in ["eval", "exec"]:
                 for arg in node.args:
                     if isinstance(arg, ast.Name) and arg.id in tainted_vars:
-                        findings.append("⚠️  Injeção de Código via eval/exec")
+                        findings.append(" Injeção de Código via eval/exec")
                         break
 
             # Insecure Deserialization
             if func_name in ["load", "loads"] or module == "pickle":
-                findings.append("⚠️  Desserialização Insegura (pickle)")
+                findings.append(" Desserialização Insegura (pickle)")
 
             # SQL Injection (básico)
             if func_name == "execute":
@@ -246,7 +246,7 @@ def vulnerability_scan(code):
     top = search_cve_optimized(code)
 
     if top.empty:
-        print("   ℹ️  Nenhum CVE com similaridade ≥ 0.75 encontrado.")
+        print(" Nenhum CVE com similaridade ≥ 0.75 encontrado.")
     else:
         print(f"   ✓ Encontrados {len(top)} CVEs relevantes:\n")
         print(f"{'CVE':<18} {'Severidade':<10} {'Exploit':<8} {'Impact':<7} {'Similar':<9} CWE")
@@ -274,7 +274,7 @@ dados = input("Dados: ")
 pickle.loads(dados.encode())
 """
     
-    print("\n🧪 TESTE 1: Command Injection + Desserialização Insegura\n")
+    print("\n TESTE 1: Command Injection + Desserialização Insegura\n")
     vulnerability_scan(code1)
     
     # Teste 2: SQL Injection + Code Injection
@@ -287,5 +287,5 @@ calc = input("Cálculo: ")
 print(eval(calc))
 """
     
-    print("\n\n🧪 TESTE 2: SQL Injection + Code Injection\n")
+    print("\n\n TESTE 2: SQL Injection + Code Injection\n")
     vulnerability_scan(code2)
