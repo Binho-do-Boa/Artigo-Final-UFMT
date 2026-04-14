@@ -213,10 +213,10 @@ def analyze_ast_advanced(code):
             if func_name == "execute":
                 for arg in node.args:
                     if isinstance(arg, ast.BinOp) and isinstance(arg.op, ast.Add):
-                        findings.append("⚠️  SQL Injection (concatenação de string)")
+                        findings.append(" SQL Injection (concatenação de string)")
                         break
 
-    return findings if findings else ["✅ Nenhuma vulnerabilidade detectada via AST + Taint Tracking"]
+    return findings if findings else [" Nenhuma vulnerabilidade detectada via AST + Taint Tracking"]
 
 # =============================================================================
 # 6. FUNÇÃO PRINCIPAL DE SCAN
@@ -230,7 +230,7 @@ def vulnerability_scan(code):
         code (str): Código Python a ser analisado
     """
     print("═" * 74)
-    print("          🔐 SCAN HÍBRIDO v2.0 - SAST + IA Semântica")
+    print("  SCAN HÍBRIDO v2.0 - SAST + IA Semântica")
     print("═" * 74)
 
     # [1] Análise Estática
